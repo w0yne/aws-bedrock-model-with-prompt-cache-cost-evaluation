@@ -1,75 +1,73 @@
-# AWS Bedrock Prompt Cache Cost Evaluation
+# AWS Bedrock Prompt Cache 成本评估
 
-Evaluate the cost impact of **prompt caching** on Amazon Bedrock with different cache TTL settings. This repo provides a methodology, CloudWatch Logs Insights queries, and analysis templates to measure how prompt caching saves money in real-world AI coding and agent workflows.
+评估 Amazon Bedrock 上不同缓存 TTL 设置对 **Prompt Cache（提示缓存）** 成本的影响。本 repo 提供了一套方法论、CloudWatch Logs Insights 查询语句和分析模板，用于量化提示缓存在 AI 编程和 Agent 工作流中的节省效果。
 
-## Why This Matters
+## 为什么 Prompt Cache 很重要
 
-When using Claude models on Amazon Bedrock, **prompt caching** can dramatically reduce costs. In multi-turn conversations (like AI coding sessions), the same system prompt + conversation history is resent on every API call. With prompt caching enabled, Bedrock caches these repeated prefixes — and cache reads cost **90% less** than regular input tokens.
+在 Amazon Bedrock 上使用 Claude 模型时，**Prompt Cache** 可以大幅降低成本。在多轮对话（例如 AI 编程会话）中，每次 API 调用都会重复发送相同的 system prompt + 历史对话。开启缓存后，Bedrock 会缓存这些重复前缀，缓存命中的 token 费用仅为普通输入的 **10%**（节省 90%）。
 
-**Real-world example**: A full-day AI coding session processed ~397M tokens. With 95.7% cache hit rate, the actual cost was **$303** instead of **~$1,991** — an **85% savings**.
+但缓存有 TTL（过期时间）。如果两次交互之间间隔较长，缓存会过期，你就白付了缓存写入费用。**最优 TTL 取决于你的使用模式。**
 
-But cache has a TTL. If your interactions are spaced far apart, the cache expires and you pay full price for cache writes that never get reused. **The optimal TTL depends on your usage pattern.**
+## Prompt Cache 工作机制
 
-## How Prompt Caching Works on Bedrock
+### Token 类型与定价（Claude 模型）
 
-### Token Types & Pricing (Claude models)
-
-| Token Type | Description | Relative Cost |
+| Token 类型 | 说明 | 相对费用 |
 |---|---|---|
-| **Input** | Fresh tokens, no cache | 1x (baseline) |
-| **Cache Write** | First time a prefix is cached | 1.25x (25% premium) |
-| **Cache Read** | Subsequent hits on cached prefix | 0.1x (90% discount) |
-| **Output** | Model-generated tokens | Standard output pricing |
+| **Input（输入）** | 普通输入，无缓存 | 1x（基准） |
+| **Cache Write（缓存写入）** | 第一次缓存前缀时 | 1.25x（溢价 25%） |
+| **Cache Read（缓存读取）** | 后续命中缓存时 | 0.1x（优惠 90%） |
+| **Output（输出）** | 模型生成的 token | 标准输出价格 |
 
-### Cache Behavior
+### 缓存行为
 
-- Cache is based on **exact prefix matching** — the beginning of your prompt must match exactly
-- Default TTL: **5 minutes** from last use (each cache hit refreshes the TTL)
-- Extended TTL: Configurable via `cachePointConfig` in the Bedrock API (e.g., 1 hour)
-- Cache is **per-model, per-region** — different models or regions maintain separate caches
+- 基于**前缀精确匹配**——提示词开头必须完全一致才能命中缓存
+- 默认 TTL：**5 分钟**（每次缓存命中会刷新 TTL）
+- 扩展 TTL：通过 Bedrock API 的 `cachePointConfig` 配置（例如 1 小时）
+- 缓存**按模型、按区域**隔离——不同模型或不同区域各自维护独立缓存
 
-### Why AI Coding Tools Benefit Most
+### 为什么 AI 编程工具最受益
 
-Tools like Claude Code, Kiro, and AI agents using Bedrock send the full conversation context on every turn:
+Claude Code、Kiro、AI Agent 等工具每次 tool call 都会把完整对话上下文重新发给 API：
 
 ```
-Turn 1: [system prompt] + [user message 1]
-Turn 2: [system prompt] + [user message 1] + [assistant response 1] + [user message 2]
-Turn 3: [system prompt] + [user message 1] + [assistant response 1] + [user message 2] + [assistant response 2] + [user message 3]
+第 1 轮: [system prompt] + [用户消息 1]
+第 2 轮: [system prompt] + [用户消息 1] + [助手回复 1] + [用户消息 2]
+第 3 轮: [system prompt] + [用户消息 1] + [助手回复 1] + [用户消息 2] + [助手回复 2] + [用户消息 3]
 ...
 ```
 
-The prefix grows but always starts the same way → high cache hit potential.
+前缀不断增长，但开头始终相同 → 缓存命中率极高。
 
-## Evaluation Methodology
+## 评估方法论
 
-### Goal
+### 目标
 
-Compare the cost efficiency of different cache TTL settings for your specific usage pattern.
+对比不同缓存 TTL 设置下，相同工作负载的实际成本差异。
 
-### Approach
+### 思路
 
-1. **Run the same workload twice** with different cache TTL settings (e.g., 5 min vs 1 hour)
-2. **Collect token-level metrics** from CloudWatch Logs
-3. **Calculate actual vs hypothetical costs** to measure savings
+1. **用不同 TTL 跑相同的任务**（例如：5 分钟 vs 1 小时）
+2. **从 CloudWatch Logs 采集 token 级别指标**
+3. **计算实际成本 vs 假设无缓存的成本**，量化节省效果
 
-### Steps
+### 步骤
 
-#### 1. Enable Bedrock Model Invocation Logging
+#### 1. 开启 Bedrock 模型调用日志
 
-In the AWS Console → Amazon Bedrock → Settings → Model invocation logging:
+AWS 控制台 → Amazon Bedrock → 设置 → 模型调用日志：
 
-- Enable **CloudWatch Logs**
-- Select a log group (e.g., `/aws/bedrock/model-invocations`)
-- Enable **Log request metadata** (includes token counts)
+- 开启 **CloudWatch Logs**
+- 选择你的日志组（名称由你在创建时指定，本文以 `<YOUR_LOG_GROUP>` 代替）
+- 开启 **记录请求元数据**（包含 token 数量）
 
-Or via CLI:
+或通过 CLI：
 
 ```bash
 aws bedrock put-model-invocation-logging-configuration \
   --logging-config '{
     "cloudWatchConfig": {
-      "logGroupName": "/aws/bedrock/model-invocations",
+      "logGroupName": "<YOUR_LOG_GROUP>",
       "roleArn": "arn:aws:iam::<ACCOUNT_ID>:role/<BEDROCK_LOGGING_ROLE>"
     },
     "textDataDeliveryEnabled": true,
@@ -78,96 +76,89 @@ aws bedrock put-model-invocation-logging-configuration \
   }'
 ```
 
-#### 2. Run Your Workload
+> **注意**：日志组名称完全由你决定，Bedrock 不强制要求特定名称。使用 `queries/` 目录下的查询时，请将 `<YOUR_LOG_GROUP>` 替换为你实际配置的日志组名称。
 
-Run the **same task** (e.g., a code review, feature implementation, or multi-turn coding session) under each cache TTL configuration. Keep variables consistent:
+#### 2. 运行工作负载
 
-- Same model (e.g., `anthropic.claude-sonnet-4-6`)
-- Same codebase and task
-- Same region
+在每种 TTL 配置下跑**相同的任务**（例如：代码审查、功能实现、多轮编程会话）。保持控制变量一致：
 
-#### 3. Query CloudWatch Logs
+- 相同模型（例如 `anthropic.claude-sonnet-4-6`）
+- 相同代码库和任务
+- 相同区域
 
-Use the queries in [`queries/`](./queries/) to extract token metrics.
+#### 3. 查询 CloudWatch Logs
 
-#### 4. Analyze Results
+使用 [`queries/`](./queries/) 目录中的查询语句提取 token 指标。
 
-Use the analysis template in [`analysis/`](./analysis/) to compare costs.
+#### 4. 分析结果
 
-## CloudWatch Logs Insights Queries
+使用 [`analysis/`](./analysis/) 中的分析模板对比不同 TTL 场景的成本。
 
-See the [`queries/`](./queries/) directory for ready-to-use queries. Quick reference:
+## CloudWatch Logs Insights 查询
 
-### Per-Model Cost Summary
+参见 [`queries/`](./queries/) 目录，包含以下即用查询：
 
-```
-# See queries/per-model-cost-summary.sql
-```
+- **per-model-cost-summary** — 按模型汇总 token 用量和估算费用
+- **cache-hit-rate-over-time** — 按时间桶展示缓存命中率变化
+- **cost-with-vs-without-cache** — 对比实际成本 vs 假设无缓存的成本
+- **per-invocation-detail** — 逐条调用的 token 明细
+- **session-level-analysis** — 按会话（小时级）分组分析
 
-### Cache Hit Rate Over Time
+> 所有查询中的日志组名称均用 `<YOUR_LOG_GROUP>` 表示，使用前请替换为你的实际值。
 
-```
-# See queries/cache-hit-rate-over-time.sql
-```
+## 分析模板
 
-### Cost With vs Without Cache
+[`analysis/`](./analysis/) 目录包含一个对比模板，用于比较：
 
-```
-# See queries/cost-with-vs-without-cache.sql
-```
+- **场景 A**（短 TTL，例如 5 分钟）：适合连续、高密度的交互
+- **场景 B**（长 TTL，例如 1 小时）：适合有间歇停顿的使用模式
 
-## Analysis Template
+### 关键指标对比
 
-The [`analysis/`](./analysis/) directory contains a spreadsheet-friendly template for comparing:
-
-- **Scenario A** (short TTL, e.g., 5 min): Good for continuous, dense interactions
-- **Scenario B** (long TTL, e.g., 1 hour): Better for intermittent usage with gaps
-
-### Key Metrics to Compare
-
-| Metric | What It Tells You |
+| 指标 | 含义 |
 |---|---|
-| **Cache Hit Rate** | % of input tokens served from cache |
-| **Cache Write Waste** | Tokens written to cache but never read (TTL expired) |
-| **Effective Input Cost** | Blended cost per input token (accounting for cache mix) |
-| **Break-Even Point** | How many cache reads justify the cache write premium |
+| **缓存命中率** | 从缓存读取的输入 token 占比 |
+| **缓存写入浪费** | 写入但在过期前从未被读取的 token |
+| **平均每次写入被读取次数** | 衡量缓存复用效率 |
+| **有效输入成本** | 综合缓存混合后的每 token 实际成本 |
+| **盈亏平衡点** | 多少次缓存读取能覆盖写入溢价 |
 
-### Break-Even Analysis
+### 盈亏平衡分析
 
-Cache write costs 1.25x regular input. Cache read costs 0.1x. Therefore:
+缓存写入费用为普通输入的 1.25 倍，缓存读取为 0.1 倍。因此：
 
-- **1 write + 1 read** = 1.25 + 0.1 = 1.35x (vs 2x without cache) → **saves 32.5%**
-- **1 write + 2 reads** = 1.25 + 0.2 = 1.45x (vs 3x without cache) → **saves 52%**
-- **1 write + 5 reads** = 1.25 + 0.5 = 1.75x (vs 6x without cache) → **saves 71%**
-- **1 write + 10 reads** = 1.25 + 1.0 = 2.25x (vs 11x without cache) → **saves 80%**
+- **1 次写入 + 1 次读取** = 1.25 + 0.1 = 1.35x（vs 不缓存的 2x）→ **节省 32.5%**
+- **1 次写入 + 2 次读取** = 1.25 + 0.2 = 1.45x（vs 不缓存的 3x）→ **节省 52%**
+- **1 次写入 + 5 次读取** = 1.25 + 0.5 = 1.75x（vs 不缓存的 6x）→ **节省 71%**
+- **1 次写入 + 10 次读取** = 1.25 + 1.0 = 2.25x（vs 不缓存的 11x）→ **节省 80%**
 
-**Rule of thumb**: If a cached prefix is read at least **once** before expiry, caching saves money. The more reads per write, the bigger the savings.
+**经验法则**：只要一个缓存前缀在过期前被读取**至少 1 次**，使用缓存就是合算的。读取次数越多，节省越显著。
 
-## Project Structure
+## 项目结构
 
 ```
 aws-bedrock-model-with-prompt-cache-cost-evaluation/
-├── README.md                              # This file
+├── README.md                              # 本文件
 ├── queries/
-│   ├── per-model-cost-summary.sql         # Aggregate cost by model
-│   ├── cache-hit-rate-over-time.sql       # Cache hit rate in time buckets
-│   ├── cost-with-vs-without-cache.sql     # Compare actual vs no-cache cost
-│   ├── per-invocation-detail.sql          # Per-call token breakdown
-│   └── session-level-analysis.sql         # Group by session/conversation
+│   ├── per-model-cost-summary.sql         # 按模型汇总成本
+│   ├── cache-hit-rate-over-time.sql       # 缓存命中率时间趋势
+│   ├── cost-with-vs-without-cache.sql     # 有/无缓存成本对比
+│   ├── per-invocation-detail.sql          # 逐条调用明细
+│   └── session-level-analysis.sql         # 按会话（小时）分组分析
 ├── analysis/
-│   └── cost-comparison-template.md        # Template for comparing TTL scenarios
+│   └── cost-comparison-template.md        # TTL 场景对比模板
 ├── pricing/
-│   └── bedrock-claude-pricing.md          # Current Bedrock Claude pricing reference
+│   └── bedrock-claude-pricing.md          # Bedrock Claude 定价参考
 └── LICENSE
 ```
 
-## Pricing Reference
+## 定价参考
 
-See [`pricing/bedrock-claude-pricing.md`](./pricing/bedrock-claude-pricing.md) for current Bedrock Claude model pricing including cache token rates.
+参见 [`pricing/bedrock-claude-pricing.md`](./pricing/bedrock-claude-pricing.md)，包含当前 Bedrock Claude 模型定价及缓存 token 费率。
 
-## Contributing
+## 贡献
 
-Issues and PRs welcome. If you run this evaluation on a specific use case, consider sharing your anonymized results.
+欢迎提 Issue 和 PR。
 
 ## License
 

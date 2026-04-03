@@ -1,71 +1,71 @@
-# Cost Comparison Template
+# 成本对比模板
 
-Use this template to compare costs between different cache TTL configurations.
+使用此模板对比不同缓存 TTL 配置下的成本差异。
 
-## Test Configuration
+## 测试配置
 
-| Parameter | Scenario A | Scenario B |
+| 参数 | 场景 A | 场景 B |
 |---|---|---|
-| **Cache TTL** | 5 minutes (default) | 1 hour |
-| **Model** | | |
-| **Region** | | |
-| **Task** | | |
-| **Date** | | |
+| **缓存 TTL** | 5 分钟（默认） | 1 小时 |
+| **模型** | | |
+| **区域** | | |
+| **任务** | | |
+| **日期** | | |
 
-## Raw Metrics (from CloudWatch queries)
+## 原始指标（来自 CloudWatch 查询）
 
-| Metric | Scenario A | Scenario B |
+| 指标 | 场景 A | 场景 B |
 |---|---|---|
-| Total invocations | | |
-| Input tokens | | |
-| Cache read tokens | | |
-| Cache write tokens | | |
-| Output tokens | | |
-| Total tokens | | |
+| 总调用次数 | | |
+| 输入 Token | | |
+| 缓存读取 Token | | |
+| 缓存写入 Token | | |
+| 输出 Token | | |
+| 总 Token | | |
 
-## Cache Efficiency
+## 缓存效率
 
-| Metric | Scenario A | Scenario B |
+| 指标 | 场景 A | 场景 B |
 |---|---|---|
-| Cache hit rate (%) | | |
-| Cache write waste (tokens written but never read) | | |
-| Avg cache reads per write | | |
+| 缓存命中率（%） | | |
+| 缓存写入浪费（写入但过期前未被读取的 token） | | |
+| 平均每次写入被读取次数 | | |
 
-## Cost Analysis
+## 成本分析
 
-Fill in using your model's pricing from [`pricing/bedrock-claude-pricing.md`](../pricing/bedrock-claude-pricing.md).
+定价数据参见 [`pricing/bedrock-claude-pricing.md`](../pricing/bedrock-claude-pricing.md)。
 
-| Cost Component | Scenario A | Scenario B |
+| 成本项 | 场景 A | 场景 B |
 |---|---|---|
-| Input cost | $ | $ |
-| Cache write cost | $ | $ |
-| Cache read cost | $ | $ |
-| Output cost | $ | $ |
-| **Total actual cost** | **$** | **$** |
-| Hypothetical cost (no cache) | $ | $ |
-| **Savings vs no cache** | **%** | **%** |
+| 输入费用 | $ | $ |
+| 缓存写入费用 | $ | $ |
+| 缓存读取费用 | $ | $ |
+| 输出费用 | $ | $ |
+| **实际总费用** | **$** | **$** |
+| 假设无缓存的费用 | $ | $ |
+| **相比无缓存节省** | **%** | **%** |
 
-## Interpretation
+## 结果解读
 
-### When Short TTL (5 min) Is Better
+### 短 TTL（5 分钟）更合适的场景
 
-- Continuous, dense interactions with no gaps > 5 minutes
-- Lower cache write overhead (less data cached speculatively)
-- Cost-efficient when every write gets multiple reads
+- 连续、高密度的交互，间隔不超过 5 分钟
+- 缓存写入开销更低（缓存的数据更少）
+- 每次写入能被多次读取时，成本效益高
 
-### When Long TTL (1 hour) Is Better
+### 长 TTL（1 小时）更合适的场景
 
-- Intermittent usage with gaps of 5-60 minutes (e.g., code review → coffee → resume)
-- Multi-step workflows where the user pauses to test or think
-- Higher upfront cache write cost, but avoids expensive re-caching after short breaks
+- 有间歇停顿的使用模式（例如：写代码 → 休息 → 继续）
+- 多步骤工作流，中间有测试、思考等停顿
+- 前期缓存写入成本较高，但避免了短暂中断后的重复缓存写入
 
-### Break-Even Guidance
+### 盈亏平衡参考
 
-A cache write costs 1.25x input. A cache read costs 0.1x input.
+缓存写入费用为普通输入的 1.25 倍，缓存读取为 0.1 倍。
 
-- If a cached prefix is read **≥1 time** before expiry → caching saves money
-- At **2 reads per write** → saves ~52%
-- At **5 reads per write** → saves ~71%
-- At **10+ reads per write** → saves ~80%+
+- 缓存前缀在过期前被读取 **≥1 次** → 使用缓存合算
+- **2 次读取/写入** → 节省约 52%
+- **5 次读取/写入** → 节省约 71%
+- **10+ 次读取/写入** → 节省约 80%+
 
-If your sessions have frequent gaps that exceed the TTL, **extending the TTL prevents cache thrashing** (repeated write → expire → write cycles) at the cost of longer cache retention billing.
+如果你的会话中频繁出现超过 TTL 的间隔，**延长 TTL 可以防止缓存抖动**（反复写入 → 过期 → 再写入），代价是更长的缓存保留费用。

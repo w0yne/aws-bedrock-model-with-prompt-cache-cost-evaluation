@@ -1,59 +1,59 @@
-# Bedrock Claude Model Pricing Reference
+# Bedrock Claude 模型定价参考
 
-> Pricing as of early 2026. Always verify at [Amazon Bedrock Pricing](https://aws.amazon.com/bedrock/pricing/).
+> 以下价格为 2026 年初数据，请以 [Amazon Bedrock 官方定价页面](https://aws.amazon.com/bedrock/pricing/) 为准。
 
 ## Claude Opus 4.6
 
-| Token Type | Price per 1M tokens |
+| Token 类型 | 每百万 Token 价格 |
 |---|---|
-| Input | $15.00 |
-| Output | $75.00 |
-| Cache Write | $18.75 (1.25x input) |
-| Cache Read | $1.50 (0.1x input) |
+| 输入 | $15.00 |
+| 输出 | $75.00 |
+| 缓存写入 | $18.75（输入的 1.25 倍） |
+| 缓存读取 | $1.50（输入的 0.1 倍） |
 
 ## Claude Sonnet 4.6
 
-| Token Type | Price per 1M tokens |
+| Token 类型 | 每百万 Token 价格 |
 |---|---|
-| Input | $3.00 |
-| Output | $15.00 |
-| Cache Write | $3.75 (1.25x input) |
-| Cache Read | $0.30 (0.1x input) |
+| 输入 | $3.00 |
+| 输出 | $15.00 |
+| 缓存写入 | $3.75（输入的 1.25 倍） |
+| 缓存读取 | $0.30（输入的 0.1 倍） |
 
 ## Claude Haiku 4.5
 
-| Token Type | Price per 1M tokens |
+| Token 类型 | 每百万 Token 价格 |
 |---|---|
-| Input | $0.80 |
-| Output | $4.00 |
-| Cache Write | $1.00 (1.25x input) |
-| Cache Read | $0.08 (0.1x input) |
+| 输入 | $0.80 |
+| 输出 | $4.00 |
+| 缓存写入 | $1.00（输入的 1.25 倍） |
+| 缓存读取 | $0.08（输入的 0.1 倍） |
 
-## Cache Pricing Formula
+## 缓存定价公式
 
-For any Claude model on Bedrock:
+对所有 Bedrock 上的 Claude 模型：
 
-- **Cache Write** = Input price × 1.25
-- **Cache Read** = Input price × 0.10
+- **缓存写入** = 输入价格 × 1.25
+- **缓存读取** = 输入价格 × 0.10
 
-## Cost Calculation
-
-```
-Total Cost = (input_tokens × input_price / 1M)
-           + (cache_write_tokens × cache_write_price / 1M)
-           + (cache_read_tokens × cache_read_price / 1M)
-           + (output_tokens × output_price / 1M)
-```
-
-## Hypothetical No-Cache Cost
+## 成本计算公式
 
 ```
-No-Cache Cost = ((input_tokens + cache_read_tokens + cache_write_tokens) × input_price / 1M)
-              + (output_tokens × output_price / 1M)
+实际成本 = (输入Token × 输入价格 / 1M)
+         + (缓存写入Token × 缓存写入价格 / 1M)
+         + (缓存读取Token × 缓存读取价格 / 1M)
+         + (输出Token × 输出价格 / 1M)
 ```
 
-## Savings Calculation
+## 假设无缓存的成本
 
 ```
-Savings % = (no_cache_cost - actual_cost) / no_cache_cost × 100
+无缓存成本 = ((输入Token + 缓存读取Token + 缓存写入Token) × 输入价格 / 1M)
+           + (输出Token × 输出价格 / 1M)
+```
+
+## 节省比例计算
+
+```
+节省比例 = (无缓存成本 - 实际成本) / 无缓存成本 × 100%
 ```
